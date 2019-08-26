@@ -14,24 +14,122 @@
 #define BODYKEY_NAME "BodyColor"
 #define FileNAME "SpBird.ini"
 
-
 hexdsp_t *hexdsp;
 HightLight *pHLight = NULL;
 
-static bool findMatchPos(strvec_t*pStrvec, int lineNum, int xPos, int &matchLine, int &matchXpos)
+// 检查位置是否在字符串中
+static bool checkPosInString(qstring input, int pos) {
+  int len = input.size();
+  bool isString = false;
+  int skip = 0;
+
+  if (pos >= len) return false;
+
+  for (int i = 0; i < len; i++) {
+    if (pos == i) return isString;
+
+    if (skip > 0) {
+      skip--;
+      continue;
+    }
+
+    // 判断字符串模式
+    if (isString) {
+      // 双引号, 结束字符串模式
+      if (input[i] == '"') {
+        isString = false;
+      }
+      // 转义符, 跳过下一个
+      else if (input[i] == '\\') {
+        skip = 1;
+      }
+    }
+    else {
+      // 双引号, 开始字符串模式
+      if (input[i] == '"') {
+        isString = true;
+      }
+      // 正斜杠, 判断注释
+      else if (input[i] == '/') {
+        size_t next = i + 1;
+
+        if ((next < len) && (input[next] == '/')) {
+          break;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+//移除代码行中的注释部分
+static qstring handleLine(qstring input) {
+  size_t len = input.size();
+  bool isString = false;
+  size_t skip = 0, last;
+
+  for (size_t i = 0; i < len; i++) {
+    last = i;
+
+    if (skip > 0) {
+      skip--;
+      continue;
+    }
+
+    // 判断字符串模式
+    if (isString) {
+      // 双引号, 结束字符串模式
+      if (input[i] == '"') {
+        isString = false;
+      }
+      // 转义符, 跳过下一个
+      else if (input[i] == '\\') {
+        skip = 1;
+      }
+    }
+    else {
+      // 双引号, 开始字符串模式
+      if (input[i] == '"') {
+        isString = true;
+      }
+      // 正斜杠, 判断注释
+      else if (input[i] == '/') {
+        size_t next = i + 1;
+
+        if ((next < len) && (input[next] == '/')) {
+          break;
+        }
+      }
+    }
+  }
+
+  return input.substr(0, last);
+}
+
+static bool findMatchPos(strvec_t *pStrvec, int lineNum, int xPos, int &matchLine, int &matchXpos)
 {
   qstring strBuf;
   int pos = xPos - 1;
   int line = lineNum;
-  tag_remove(&strBuf, (*pStrvec)[line].line.c_str(), MAX_NUMBUF);
-  char bMatched = strBuf[pos];
-  if (bMatched == ')' ||
-    bMatched == '(')
-  {
+  char bMatched = 0;
 
+  tag_remove(&strBuf, (*pStrvec)[line].line.c_str(), MAX_NUMBUF);
+  strBuf = handleLine(strBuf);
+
+  if (xPos < strBuf.size()) {
+    bMatched = strBuf[pos];
+  }
+
+  msg("HightLight: xPos: %d\n", xPos);
+  msg("HightLight: bMatched: %c\n", bMatched);
+
+  if (bMatched == ')' || bMatched == '(')
+  {
     bool bSearchDown = true; // 是否向下查找
     char bMatch = 0; // 待匹配查找字符
     int nStep = 1;
+
     if (bMatched == ')')
     {
       bMatch = '(';
@@ -42,39 +140,90 @@ static bool findMatchPos(strvec_t*pStrvec, int lineNum, int xPos, int &matchLine
     {
       bMatch = ')';
     }
+
     int matchTime = 1;
     bool bMat = false;
 
     pos = pos + nStep;
+
     do
     {
+      bool isString = false;
+      int skip = 0;
+
       while (pos >= 0 && pos < strBuf.size())
       {
-        if (strBuf[pos] == bMatch)
-        {
-          matchTime--;
+        if (skip > 0) {
+          skip--;
+          pos = pos + nStep;
+          continue;
         }
-        else if (strBuf[pos] == bMatched)
-        {
-          matchTime++;
+
+        if (isString) {
+          // 正序搜索
+          if (bSearchDown) {
+            // 判断内嵌双引号: \"
+            if (strBuf[pos] == '\\') {
+              skip = 1;
+            }
+            // 判断字符串模式结束
+            else if (strBuf[pos] == '"') {
+              isString = false;
+            }
+          }
+          // 倒序搜索
+          else {
+            // 判断字符串模式结束
+            if (strBuf[pos] == '"') {
+              int nextPos = pos + nStep;
+
+              // 判断内嵌双引号: \"
+              if (nextPos >= 0 && nextPos < strBuf.size()) {
+                if (strBuf[nextPos] != '\\') {
+                  isString = false;
+                }
+              }
+            }
+          }
         }
-        if (matchTime == 0)
-        {
-          // 匹配到
-          bMat = true;
-          break;
+        else {
+          // 非字符串模式, 判断匹配字符
+          if (strBuf[pos] == '"') {
+            isString = true;
+          }
+          else if (strBuf[pos] == bMatch)
+          {
+            matchTime--;
+          }
+          else if (strBuf[pos] == bMatched)
+          {
+            matchTime++;
+          }
+
+          if (matchTime == 0)
+          {
+            // 匹配到
+            bMat = true;
+            break;
+          }
         }
+
         pos = pos + nStep;
       }
+
       if (bMat)
       {
         matchLine = line;
         matchXpos = pos;
         break;
       }
+
       // 要换行匹配
       line = line + nStep;
+
       tag_remove(&strBuf, (*pStrvec)[line].line.c_str(), MAX_NUMBUF);
+      strBuf = handleLine(strBuf);
+
       if (bSearchDown)
       {
         pos = 0;
@@ -99,6 +248,7 @@ static bool findMatchPos(strvec_t*pStrvec, int lineNum, int xPos, int &matchLine
 
 
 static void convert_zeroes(cfunc_t *cfunc);
+
 void get_ini_path(qstring &path)
 {
   path = idadir(PLG_SUBDIR);
@@ -213,6 +363,7 @@ ssize_t idaapi myhexrays_cb_t(void *ud, hexrays_event_t event, va_list va)
     int matchLine = 0;
     int matchxpos = 0;
     char selectBuf = 0;
+
     //TEST 
     //		char *pAdvance = (char *)tag_advance((*str_t)[yPos].line.c_str(), 0);
     //		msg("check tag_advance : %s", pAdvance);
@@ -220,11 +371,23 @@ ssize_t idaapi myhexrays_cb_t(void *ud, hexrays_event_t event, va_list va)
     {
       refresh_idaview_anyway();
     }
+
     tag_remove(&strBuf, (*str_t)[yPos].line.c_str(), MAX_NUMBUF);
-    if (xPos > 1 && xPos < strBuf.size())
-    {
-      selectBuf = strBuf[xPos - 1];
+
+    strBuf = handleLine(strBuf);
+
+    msg("HightLight: line: %s\n", strBuf.c_str());
+
+    // 只选择非字符串中的()
+    if (checkPosInString(strBuf, xPos) == false) {
+      if (xPos > 1 && xPos < strBuf.size())
+      {
+        selectBuf = strBuf[xPos - 1];
+      }
     }
+
+    msg("HightLight: selectBuf: '%c'\n", selectBuf);
+
     if (selectBuf == '(' || selectBuf == ')')
     {
       if (findMatchPos(str_t, yPos, xPos, matchLine, matchxpos))
