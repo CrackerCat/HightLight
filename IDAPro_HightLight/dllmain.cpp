@@ -1,5 +1,4 @@
-// dllmain.cpp : ¶¨Òå DLL Ó¦ÓÃ³ÌÐòµÄÈë¿Úµã¡£
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
