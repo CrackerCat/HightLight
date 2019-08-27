@@ -63,8 +63,54 @@ static bool checkPosInString(qstring input, int pos) {
   return false;
 }
 
+// 跳过字符串和注释查找
+static int findEx(qstring input, char find) {
+  int len = input.size();
+  bool isString = false;
+  int skip = 0;
+
+  for (int i = 0; i < len; i++) {
+    if (skip > 0) {
+      skip--;
+      continue;
+    }
+
+    // 判断字符串模式
+    if (isString) {
+      // 双引号, 结束字符串模式
+      if (input[i] == '"') {
+        isString = false;
+      }
+      // 转义符, 跳过下一个
+      else if (input[i] == '\\') {
+        skip = 1;
+      }
+    }
+    else {
+      // 双引号, 开始字符串模式
+      if (input[i] == '"') {
+        isString = true;
+      }
+      // 正斜杠, 判断注释
+      else if (input[i] == '/') {
+        size_t next = i + 1;
+
+        if ((next < len) && (input[next] == '/')) {
+          break;
+        }
+      }
+      // 匹配的字符
+      else if (input[i] == find) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
 //移除代码行中的注释部分
-static qstring handleLine(qstring input) {
+static qstring removeComment(qstring input) {
   size_t len = input.size();
   bool isString = false;
   size_t skip = 0, last;
@@ -115,14 +161,11 @@ static bool findMatchPos(strvec_t *pStrvec, int lineNum, int xPos, int &matchLin
   char bMatched = 0;
 
   tag_remove(&strBuf, (*pStrvec)[line].line.c_str(), MAX_NUMBUF);
-  strBuf = handleLine(strBuf);
+  strBuf = removeComment(strBuf);
 
   if (xPos < strBuf.size()) {
     bMatched = strBuf[pos];
   }
-
-  msg("HightLight: xPos: %d\n", xPos);
-  msg("HightLight: bMatched: %c\n", bMatched);
 
   if (bMatched == ')' || bMatched == '(')
   {
@@ -222,7 +265,7 @@ static bool findMatchPos(strvec_t *pStrvec, int lineNum, int xPos, int &matchLin
       line = line + nStep;
 
       tag_remove(&strBuf, (*pStrvec)[line].line.c_str(), MAX_NUMBUF);
-      strBuf = handleLine(strBuf);
+      strBuf = removeComment(strBuf);
 
       if (bSearchDown)
       {
@@ -374,19 +417,17 @@ ssize_t idaapi myhexrays_cb_t(void *ud, hexrays_event_t event, va_list va)
 
     tag_remove(&strBuf, (*str_t)[yPos].line.c_str(), MAX_NUMBUF);
 
-    strBuf = handleLine(strBuf);
+    strBuf = removeComment(strBuf);
 
-    msg("HightLight: line: %s\n", strBuf.c_str());
+    if (xPos > 1 && xPos < strBuf.size())
+    {
+      char current = strBuf[xPos - 1];
 
-    // 只选择非字符串中的()
-    if (checkPosInString(strBuf, xPos) == false) {
-      if (xPos > 1 && xPos < strBuf.size())
-      {
-        selectBuf = strBuf[xPos - 1];
+      // 只选择非字符串中的()
+      if ((current == '(' || current == ')') && (checkPosInString(strBuf, xPos) == false)) {
+        selectBuf = current;
       }
     }
-
-    msg("HightLight: selectBuf: '%c'\n", selectBuf);
 
     if (selectBuf == '(' || selectBuf == ')')
     {
@@ -447,8 +488,6 @@ ssize_t idaapi myhexrays_cb_t(void *ud, hexrays_event_t event, va_list va)
       // do nothing yet
     }
 
-
-
     break;
   }
   case hxe_double_click:
@@ -479,18 +518,25 @@ ssize_t idaapi myhexrays_cb_t(void *ud, hexrays_event_t event, va_list va)
 
     qstring strBuf;
     tag_remove(&strBuf, (*str_t)[yPos].line.c_str(), MAX_NUMBUF);
+    strBuf = removeComment(strBuf);
+
+    /*
     if (strBuf.find("//") > 0)
     {
       strBuf = strBuf.substr(0, strBuf.find("//"));
     }
-    int blockBegin = strBuf.find('{');
-    int blockEnd = strBuf.find('}');
+    */
+
+    int blockBegin = findEx(strBuf, '{');
+    int blockEnd = findEx(strBuf, '}');
+
     if (blockBegin >= 0 || blockEnd >= 0)
     {
       pTempHlight->restore_color(str_t);
-      char findChar = '}';
-      int findIndex = 1;
-      int findPos = blockBegin;
+
+      char findChar;
+      int findIndex;
+      int findPos;
 
       if (blockEnd >= 0)
       {
@@ -498,28 +544,46 @@ ssize_t idaapi myhexrays_cb_t(void *ud, hexrays_event_t event, va_list va)
         findIndex = -1;
         findPos = blockEnd;
       }
+      else {
+        findChar = '}';
+        findIndex = 1;
+        findPos = blockBegin;
+      }
+
       (*str_t)[yPos].bgcolor = pTempHlight->get_hcolor();
       //
       int j = yPos + findIndex;
       int max = (*str_t).size();
+
+      // 循环行
       while (j >= 0 && j < max)
       {
         qstring outStr;
+        int len;
+
         tag_remove(&outStr, (*str_t)[j].line.c_str(), MAX_NUMBUF);
+
+        /*
         int findLen = outStr.find("//");
         if (findLen > 0)
         {
           outStr = outStr.substr(0, findLen);
         }
-        if (outStr.find(findChar) == findPos)
-        {
-          (*str_t)[j].bgcolor = pTempHlight->get_hcolor();
-          break;
+        */
+
+        outStr = removeComment(outStr);
+        len = outStr.size();
+
+        if (findPos >= 0 && findPos < len) {
+          // 存在findChar, 并且不在字符串中
+          if (outStr[findPos] == findChar && checkPosInString(outStr, findPos) == false) {
+            (*str_t)[j].bgcolor = pTempHlight->get_hcolor();
+            break;
+          }
         }
-        else
-        {
-          (*str_t)[j].bgcolor = pTempHlight->get_bcolor();
-        }
+
+        (*str_t)[j].bgcolor = pTempHlight->get_bcolor();
+
         j += findIndex;
       }
       if (findIndex > 0)
