@@ -1,4 +1,4 @@
-
+ï»¿
 #ifndef _HIGHT_LIGHT_H
 #define _HIGHT_LIGHT_H
 
@@ -9,7 +9,7 @@
 
 
 
-/* ¸ßÁÁ¹ÜÀíÀà;·ÖÎª2²¿·Ö£¬Ò»²¿·ÖÊÇ {}¶ÎµÄ£¬ÁíÍâÒ»²¿·ÖÊÇ () Æ¥ÅäµÄ
+/* é«˜äº®ç®¡ç†ç±»;åˆ†ä¸º2éƒ¨åˆ†ï¼Œä¸€éƒ¨åˆ†æ˜¯ {}æ®µçš„ï¼Œå¦å¤–ä¸€éƒ¨åˆ†æ˜¯ () åŒ¹é…çš„
 */
 class HightLight
 {
@@ -77,7 +77,7 @@ public:
 		m_EndLine = 0;
 	}
 
-	//  ºóÃæÊÇ () ¸ßÁÁ¹ÜÀí
+	//  åé¢æ˜¯ () é«˜äº®ç®¡ç†
 
 	void InsertColor(int line, qstring &str)
 	{
@@ -109,26 +109,26 @@ public:
 
 
 private:
-	/* ¶ÔÓ¦µÄÌø×ªÏîline
+	/* å¯¹åº”çš„è·³è½¬é¡¹line
 	*/
 	int m_jLine;
-	/* ÊÇ·ñÒÑ¾­¸ßÁÁ
+	/* æ˜¯å¦å·²ç»é«˜äº®
 	*/
 	bool m_bHaveHLight;
-	/* ¸ßÁÁµÄÆğÊ¼ºÍ½áÊø
+	/* é«˜äº®çš„èµ·å§‹å’Œç»“æŸ
 	*/
 	int m_StartLine;
 	int m_EndLine;
-	/* headµÄÑÕÉ«
+	/* headçš„é¢œè‰²
 	*/
 	bgcolor_t m_hColor;
-	/* bodyµÄÑÕÉ«
+	/* bodyçš„é¢œè‰²
 	*/
 	bgcolor_t m_bColor;
 
 
-	//  ºóÃæÊÇ () ¸ßÁÁ¹ÜÀí
-	/*  () Æ¥ÅäµÄ
+	//  åé¢æ˜¯ () é«˜äº®ç®¡ç†
+	/*  () åŒ¹é…çš„
 	*/
 	struct HightInfo
 	{
